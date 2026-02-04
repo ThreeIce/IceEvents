@@ -1,0 +1,19 @@
+{
+    "name": "com.threeice.iceevents",
+    "version": "1.0.0",
+    "displayName": "IceEvents",
+    "description": "A high-performance, parallel-safe event system for Unity Entities (DOTS).",
+    "unity": "2022.3",
+    "author": {
+        "name": "ThreeIce"
+    },
+    "dependencies": {
+        "com.unity.entities": "1.0.0"
+    },
+    "keywords": [
+        "dots",
+        "ecs",
+        "events",
+        "threeice"
+    ]
+}
