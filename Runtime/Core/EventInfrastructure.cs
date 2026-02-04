@@ -1,29 +1,14 @@
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
-using Unity.Mathematics;
 
 namespace IceEvents
 {
     /// <summary>
-    /// Base interface for all events.
-    /// IMPORTANT: For every implemented event type, you MUST register the generic components 
-    /// at the assembly level to enable ECS memory layout generation:
-    /// <code>
+    /// Base interface for all events in the IceEvents system.
+    /// <para>IMPORTANT: For every concrete event type, you MUST register the <see cref="EventBuffer{T}"/> at the assembly level:</para>
     /// [assembly: RegisterGenericComponentType(typeof(EventBuffer&lt;MyEvent&gt;))]
-    /// [assembly: RegisterGenericComponentType(typeof(InternalEvent&lt;MyEvent&gt;))]
-    /// </code>
     /// </summary>
     public interface IEvent { }
-
-    /// <summary>
-    /// Internal wrapper to associate an event with a global sequence ID.
-    /// </summary>
-    public struct InternalEvent<T> where T : unmanaged, IEvent
-    {
-        public ulong SequenceID;
-        public T Data;
-    }
 
     /// <summary>
     /// Singleton component that stores the dual-loop buffers for a specific event type.
@@ -32,15 +17,14 @@ namespace IceEvents
     public struct EventBuffer<T> : IComponentData where T : unmanaged, IEvent
     {
         // View for Update Loop
-        public NativeList<InternalEvent<T>> BufferUpdateCurrent;
-        public NativeList<InternalEvent<T>> BufferUpdatePrevious;
+        public NativeList<T> BufferUpdateCurrent;
+        public NativeList<T> BufferUpdatePrevious;
+        public ulong BaseIdUpdatePrev;
 
         // View for FixedUpdate Loop
-        public NativeList<InternalEvent<T>> BufferFixedCurrent;
-        public NativeList<InternalEvent<T>> BufferFixedPrevious;
-
-        // Shared Atomic Counter
-        public NativeArray<ulong> GlobalCounter;
+        public NativeList<T> BufferFixedCurrent;
+        public NativeList<T> BufferFixedPrevious;
+        public ulong BaseIdFixedPrev;
 
         public bool IsCreated => BufferUpdateCurrent.IsCreated;
     }
@@ -51,27 +35,14 @@ namespace IceEvents
     /// </summary>
     public struct EventWriter<T> where T : unmanaged, IEvent
     {
-        public NativeList<InternalEvent<T>>.ParallelWriter WriterUpdate;
-        public NativeList<InternalEvent<T>>.ParallelWriter WriterFixed;
+        public NativeList<T>.ParallelWriter WriterUpdate;
+        public NativeList<T>.ParallelWriter WriterFixed;
 
-        [NativeDisableParallelForRestriction]
-        public NativeArray<ulong> GlobalCounter;
-
-        public unsafe void Write(T eventData)
+        public void Write(T eventData)
         {
-            // Atomic increment for a globally unique ID
-            ulong* ptr = (ulong*)GlobalCounter.GetUnsafePtr();
-            ulong id = (ulong)System.Threading.Interlocked.Increment(ref *(long*)ptr);
-
-            var ev = new InternalEvent<T>
-            {
-                SequenceID = id,
-                Data = eventData
-            };
-
             // Write to both channels
-            WriterUpdate.AddNoResize(ev);
-            WriterFixed.AddNoResize(ev);
+            WriterUpdate.AddNoResize(eventData);
+            WriterFixed.AddNoResize(eventData);
         }
     }
 }

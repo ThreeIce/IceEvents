@@ -20,6 +20,9 @@ namespace IceEvents
         {
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<T>>();
 
+            // Update BaseID: New Base = Old Base + Length of discarded buffer
+            buffer.ValueRW.BaseIdUpdatePrev += (ulong)buffer.ValueRW.BufferUpdatePrevious.Length;
+
             buffer.ValueRW.BufferUpdatePrevious.Clear();
             var temp = buffer.ValueRW.BufferUpdatePrevious;
             buffer.ValueRW.BufferUpdatePrevious = buffer.ValueRW.BufferUpdateCurrent;
@@ -34,11 +37,10 @@ namespace IceEvents
                 var entity = em.CreateEntity();
                 em.AddComponentData(entity, new EventBuffer<TEvent>
                 {
-                    BufferUpdateCurrent = new NativeList<InternalEvent<TEvent>>(128, Allocator.Persistent),
-                    BufferUpdatePrevious = new NativeList<InternalEvent<TEvent>>(128, Allocator.Persistent),
-                    BufferFixedCurrent = new NativeList<InternalEvent<TEvent>>(128, Allocator.Persistent),
-                    BufferFixedPrevious = new NativeList<InternalEvent<TEvent>>(128, Allocator.Persistent),
-                    GlobalCounter = new NativeArray<ulong>(1, Allocator.Persistent)
+                    BufferUpdateCurrent = new NativeList<TEvent>(128, Allocator.Persistent),
+                    BufferUpdatePrevious = new NativeList<TEvent>(128, Allocator.Persistent),
+                    BufferFixedCurrent = new NativeList<TEvent>(128, Allocator.Persistent),
+                    BufferFixedPrevious = new NativeList<TEvent>(128, Allocator.Persistent)
                 });
             }
         }
@@ -49,11 +51,14 @@ namespace IceEvents
             if (!query.IsEmptyIgnoreFilter)
             {
                 var buffer = query.GetSingletonRW<EventBuffer<T>>();
-                buffer.ValueRW.BufferUpdateCurrent.Dispose();
-                buffer.ValueRW.BufferUpdatePrevious.Dispose();
-                buffer.ValueRW.BufferFixedCurrent.Dispose();
-                buffer.ValueRW.BufferFixedPrevious.Dispose();
-                buffer.ValueRW.GlobalCounter.Dispose();
+                // Check if already disposed (buffers are valid)
+                if (buffer.ValueRW.BufferUpdateCurrent.IsCreated)
+                {
+                    buffer.ValueRW.BufferUpdateCurrent.Dispose();
+                    buffer.ValueRW.BufferUpdatePrevious.Dispose();
+                    buffer.ValueRW.BufferFixedCurrent.Dispose();
+                    buffer.ValueRW.BufferFixedPrevious.Dispose();
+                }
             }
         }
     }
@@ -67,6 +72,9 @@ namespace IceEvents
         protected override void OnUpdate()
         {
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<T>>();
+
+            // Update BaseID
+            buffer.ValueRW.BaseIdFixedPrev += (ulong)buffer.ValueRW.BufferFixedPrevious.Length;
 
             buffer.ValueRW.BufferFixedPrevious.Clear();
             var temp = buffer.ValueRW.BufferFixedPrevious;
