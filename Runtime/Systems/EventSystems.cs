@@ -67,17 +67,17 @@ namespace IceEvents
     }
 
     /// <summary>
-    /// Managed system responsible for the UPDATE loop buffer swap.
+    /// System responsible for the UPDATE loop buffer swap.
     /// </summary>
     [UpdateInGroup(typeof(InitializationSystemGroup))]
-    public partial class EventLifecycleUpdateSystem<T> : SystemBase where T : unmanaged, IEvent
+    public partial struct EventLifecycleUpdateSystem<T> : ISystem where T : unmanaged, IEvent
     {
-        protected override void OnCreate()
+        public readonly void OnCreate(ref SystemState state)
         {
-            EnsureBufferInitialized<T>(EntityManager);
+            EnsureBufferInitialized<T>(state.EntityManager);
         }
 
-        protected override void OnUpdate()
+        public readonly void OnUpdate(ref SystemState state)
         {
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<T>>();
 
@@ -85,9 +85,7 @@ namespace IceEvents
             buffer.ValueRW.BaseIdUpdatePrev += (ulong)buffer.ValueRW.BufferUpdatePrevious.Length;
 
             buffer.ValueRW.BufferUpdatePrevious.Clear();
-            var temp = buffer.ValueRW.BufferUpdatePrevious;
-            buffer.ValueRW.BufferUpdatePrevious = buffer.ValueRW.BufferUpdateCurrent;
-            buffer.ValueRW.BufferUpdateCurrent = temp;
+            (buffer.ValueRW.BufferUpdateCurrent, buffer.ValueRW.BufferUpdatePrevious) = (buffer.ValueRW.BufferUpdatePrevious, buffer.ValueRW.BufferUpdateCurrent);
         }
 
         internal static void EnsureBufferInitialized<TEvent>(EntityManager em) where TEvent : unmanaged, IEvent
@@ -104,33 +102,33 @@ namespace IceEvents
                     BufferFixedPrevious = new NativeList<TEvent>(128, Allocator.Persistent)
                 });
             }
+            else
+            {
+                throw new InvalidOperationException("EventBuffer<T> already exists");
+            }
         }
 
-        protected override void OnDestroy()
+        public readonly void OnDestroy(ref SystemState state)
         {
-            var query = EntityManager.CreateEntityQuery(ComponentType.ReadWrite<EventBuffer<T>>());
-            if (!query.IsEmptyIgnoreFilter)
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<T>>();
+            // Check if already disposed (buffers are valid)
+            if (buffer.ValueRW.BufferUpdateCurrent.IsCreated)
             {
-                var buffer = query.GetSingletonRW<EventBuffer<T>>();
-                // Check if already disposed (buffers are valid)
-                if (buffer.ValueRW.BufferUpdateCurrent.IsCreated)
-                {
-                    buffer.ValueRW.BufferUpdateCurrent.Dispose();
-                    buffer.ValueRW.BufferUpdatePrevious.Dispose();
-                    buffer.ValueRW.BufferFixedCurrent.Dispose();
-                    buffer.ValueRW.BufferFixedPrevious.Dispose();
-                }
+                buffer.ValueRW.BufferUpdateCurrent.Dispose();
+                buffer.ValueRW.BufferUpdatePrevious.Dispose();
+                buffer.ValueRW.BufferFixedCurrent.Dispose();
+                buffer.ValueRW.BufferFixedPrevious.Dispose();
             }
         }
     }
 
     /// <summary>
-    /// Managed system responsible for the FIXED loop buffer swap.
+    /// System responsible for the FIXED loop buffer swap.
     /// </summary>
     [UpdateInGroup(typeof(FixedStepSimulationSystemGroup), OrderFirst = true)]
-    public partial class EventLifecycleFixedSystem<T> : SystemBase where T : unmanaged, IEvent
+    public partial struct EventLifecycleFixedSystem<T> : ISystem where T : unmanaged, IEvent
     {
-        protected override void OnUpdate()
+        public readonly void OnUpdate(ref SystemState state)
         {
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<T>>();
 
@@ -138,34 +136,8 @@ namespace IceEvents
             buffer.ValueRW.BaseIdFixedPrev += (ulong)buffer.ValueRW.BufferFixedPrevious.Length;
 
             buffer.ValueRW.BufferFixedPrevious.Clear();
-            var temp = buffer.ValueRW.BufferFixedPrevious;
-            buffer.ValueRW.BufferFixedPrevious = buffer.ValueRW.BufferFixedCurrent;
-            buffer.ValueRW.BufferFixedCurrent = temp;
-        }
-    }
-
-    /// <summary>
-    /// Bootstrap system that registers both Update and Fixed lifecycle systems.
-    /// </summary>
-    [WorldSystemFilter(WorldSystemFilterFlags.Default | WorldSystemFilterFlags.Editor)]
-    [UpdateInGroup(typeof(InitializationSystemGroup), OrderFirst = true)]
-    public partial class EventBootstrapSystem : SystemBase
-    {
-        private bool _initialized;
-
-        protected override void OnUpdate()
-        {
-            if (_initialized) return;
-            _initialized = true;
-
-            var eventTypes = EventTypeFinder.FindAllEventTypes();
-            var currentWorld = this.World;
-
-            foreach (var type in eventTypes)
-            {
-                currentWorld.GetOrCreateSystemManaged(typeof(EventLifecycleUpdateSystem<>).MakeGenericType(type));
-                currentWorld.GetOrCreateSystemManaged(typeof(EventLifecycleFixedSystem<>).MakeGenericType(type));
-            }
+            (buffer.ValueRW.BufferFixedCurrent, buffer.ValueRW.BufferFixedPrevious) =
+                (buffer.ValueRW.BufferFixedPrevious, buffer.ValueRW.BufferFixedCurrent);
         }
     }
 

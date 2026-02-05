@@ -5,15 +5,14 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Entities.Tests;
 using Unity.Jobs;
-using Unity.Jobs.LowLevel.Unsafe;
 using IceEvents;
 using System.Collections.Generic;
-using UnityEngine;
+using IceEvents.Tests;
 
-[assembly: RegisterGenericComponentType(typeof(IceEvents.EventBuffer<IceEvents.Tests.TestEvent>))]
-[assembly: RegisterGenericComponentType(typeof(IceEvents.EventBuffer<IceEvents.Tests.ParallelTestEvent>))]
-[assembly: RegisterGenericJobType(typeof(IceEvents.EventCommitJob<IceEvents.Tests.TestEvent>))]
-[assembly: RegisterGenericJobType(typeof(IceEvents.EventCommitJob<IceEvents.Tests.ParallelTestEvent>))]
+[assembly: RegisterGenericComponentType(typeof(EventBuffer<TestEvent>))]
+[assembly: RegisterGenericComponentType(typeof(EventBuffer<ParallelTestEvent>))]
+[assembly: RegisterGenericJobType(typeof(EventCommitJob<TestEvent>))]
+[assembly: RegisterGenericJobType(typeof(EventCommitJob<ParallelTestEvent>))]
 
 namespace IceEvents.Tests
 {
@@ -41,14 +40,14 @@ namespace IceEvents.Tests
 
         private void SimulateUpdateFrame<T>() where T : unmanaged, IEvent
         {
-            var sys = World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<T>>();
-            sys.Update();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<T>>();
+            sys.Update(World.Unmanaged);
         }
 
         private void SimulateFixedUpdateFrame<T>() where T : unmanaged, IEvent
         {
-            var sys = World.GetOrCreateSystemManaged<EventLifecycleFixedSystem<T>>();
-            sys.Update();
+            var sys = World.GetOrCreateSystem<EventLifecycleFixedSystem<T>>();
+            sys.Update(World.Unmanaged);
         }
 
         #endregion
@@ -58,7 +57,7 @@ namespace IceEvents.Tests
         [Test]
         public void Reader_ContinuousReading_TracksNewEvents()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
             var reader = buffer.GetUpdateReader(Allocator.Temp);
             reader.Update(buffer);
@@ -93,7 +92,7 @@ namespace IceEvents.Tests
         [Test]
         public void Reader_CatchUp_ReadsMissedEvents()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
             var reader = buffer.GetUpdateReader(Allocator.Temp);
 
@@ -121,7 +120,7 @@ namespace IceEvents.Tests
         [Test]
         public void Reader_PartialConsumption_BookmarkCorrect()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
 
             var writer = buffer.GetWriter();
@@ -154,7 +153,7 @@ namespace IceEvents.Tests
         [Test]
         public void Reader_EmptyBuffer_NoException()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
             var reader = buffer.GetUpdateReader(Allocator.Temp);
             reader.Update(buffer);
@@ -174,8 +173,8 @@ namespace IceEvents.Tests
         [Test]
         public void DualChannel_NoEventLost_AtDifferentRates()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
-            World.GetOrCreateSystemManaged<EventLifecycleFixedSystem<TestEvent>>();
+            var updateSys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
+            var fixedSys = World.GetOrCreateSystem<EventLifecycleFixedSystem<TestEvent>>();
             var buffer = GetBuffer();
 
             var updateReader = buffer.GetUpdateReader(Allocator.Temp);
@@ -214,7 +213,7 @@ namespace IceEvents.Tests
         [Test]
         public void Lifecycle_EventsAccessibleAfterSwap()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
             var reader = buffer.GetUpdateReader(Allocator.Temp);
 
@@ -239,11 +238,11 @@ namespace IceEvents.Tests
         [Test]
         public void Lifecycle_MultipleSwaps_WorksCorrectly()
         {
-            var sys = World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
 
-            sys.Update();
-            sys.Update();
-            sys.Update();
+            sys.Update(World.Unmanaged);
+            sys.Update(World.Unmanaged);
+            sys.Update(World.Unmanaged);
 
             var buffer = GetBuffer();
             var writer = buffer.GetWriter();
@@ -268,7 +267,7 @@ namespace IceEvents.Tests
         [Test]
         public void EdgeCase_ReaderResumesAfterPause()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
             var reader = buffer.GetUpdateReader(Allocator.Temp);
 
@@ -318,14 +317,14 @@ namespace IceEvents.Tests
         [Test]
         public void EdgeCase_LateJoinerAfterLongRun()
         {
-            var sys = World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<TestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<TestEvent>>();
             var buffer = GetBuffer();
 
             for (int i = 0; i < 20; i++)
             {
                 var writer = buffer.GetWriter();
                 writer.Write(new TestEvent { Value = i });
-                sys.Update();
+                sys.Update(World.Unmanaged);
                 buffer = GetBuffer();
             }
 
@@ -347,7 +346,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_SingleJob_EventsCommitted()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -377,7 +376,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_NoEvents_NoException()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -403,12 +402,12 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_MultipleJobsInSameSystem_EventsCommitted()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
 
-            var sys = World.GetOrCreateSystemManaged<TestMultiJobSystem>();
-            sys.ItemCount1 = 50;
-            sys.ItemCount2 = 50;
-            sys.Update();
+            var multiJobSys = World.GetOrCreateSystemManaged<TestMultiJobSystem>();
+            multiJobSys.ItemCount1 = 50;
+            multiJobSys.ItemCount2 = 50;
+            multiJobSys.Update();
             m_Manager.CompleteAllTrackedJobs();
 
             var resultBuffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
@@ -421,7 +420,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_MultipleSystemsWithAutoDependency_EventsCommitted()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
 
             var sys1 = World.GetOrCreateSystemManaged<TestParallelSystem1>();
             var sys2 = World.GetOrCreateSystemManaged<TestParallelSystem2>();
@@ -443,7 +442,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_LargeEventCount_CapacityExpands()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -563,11 +562,13 @@ namespace IceEvents.Tests
             }
         }
 
+        [DisableAutoCreation]
         partial class TestCommitSystem : SystemBase
         {
             protected override void OnUpdate() { }
         }
 
+        [DisableAutoCreation]
         partial class TestMultiJobSystem : SystemBase
         {
             public int ItemCount1;
@@ -591,6 +592,7 @@ namespace IceEvents.Tests
             }
         }
 
+        [DisableAutoCreation]
         partial class TestParallelSystem1 : SystemBase
         {
             public int ItemCount;
@@ -608,6 +610,7 @@ namespace IceEvents.Tests
             }
         }
 
+        [DisableAutoCreation]
         partial class TestParallelSystem2 : SystemBase
         {
             public int ItemCount;

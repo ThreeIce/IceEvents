@@ -16,7 +16,7 @@ namespace IceEvents.Tests
         [Test, Performance]
         public void ParallelWrite_Stress_100K_Events()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -58,7 +58,7 @@ namespace IceEvents.Tests
         public void ParallelWrite_Stress_HighFrequency_1000Frames()
         {
             // Simulate 1000 frames of updates
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
 
             Measure.Method(() =>
             {
@@ -81,8 +81,7 @@ namespace IceEvents.Tests
                 // Clear buffers (simulate end of frame update)
                 // In a real system, the EventLifecycleUpdateSystem handles this swap/clear at start of frame.
                 // We need to manually invoke the system update to trigger the lifecycle management
-                var sys = World.GetExistingSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
-                sys.Update();
+                sys.Update(World.Unmanaged);
             })
             .WarmupCount(1)
             .MeasurementCount(10) // Simulating "frames" via measurement iterations for cleaner perf data
@@ -92,7 +91,7 @@ namespace IceEvents.Tests
         [Test, Performance]
         public void ParallelWrite_Stress_CapacityGrowth()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 

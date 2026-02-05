@@ -16,7 +16,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_ZeroThreadCount_Throws()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -28,7 +28,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_CapacitySufficient_NoExpansion()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -61,7 +61,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_LargeThreadIndex_Handles()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
@@ -90,7 +90,7 @@ namespace IceEvents.Tests
         [Test]
         public void ParallelWrite_DoubleCommit_Throws()
         {
-            World.GetOrCreateSystemManaged<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
             var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
                 .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 

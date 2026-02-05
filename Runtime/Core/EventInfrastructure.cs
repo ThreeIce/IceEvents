@@ -11,7 +11,9 @@ namespace IceEvents
     /// <para>
     /// <b>Registration Requirements:</b> You MUST register your event type at the assembly level:
     /// <code>
-    /// [assembly: RegisterGenericComponentType(typeof(EventBuffer&lt;MyEvent&gt;))] // Required
+    /// [assembly: RegisterGenericComponentType(typeof(EventBuffer&lt;MyEvent&gt;))]
+    /// [assembly: RegisterGenericSystemType(typeof(EventLifecycleUpdateSystem&lt;MyEvent&gt;))]
+    /// [assembly: RegisterGenericSystemType(typeof(EventLifecycleFixedSystem&lt;MyEvent&gt;))]
     /// [assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))] // Optional: Only if using ParallelEventWriter
     /// </code>
     /// </para>
