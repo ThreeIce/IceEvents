@@ -6,19 +6,22 @@
         "Unity.Entities.Tests",
         "Unity.Collections",
         "Unity.Mathematics",
-        "IceEvents"
-    ],
-    "optionalUnityReferences": [
-        "TestAssemblies"
+        "Unity.Burst",
+        "IceEvents",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Unity.PerformanceTesting"
     ],
     "includePlatforms": [
         "Editor"
     ],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS"
     ],

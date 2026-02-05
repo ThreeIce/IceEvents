@@ -1,5 +1,7 @@
 using Unity.Entities;
 using Unity.Collections;
+using Unity.Jobs;
+using Unity.Jobs.LowLevel.Unsafe;
 
 namespace IceEvents
 {
@@ -139,6 +141,33 @@ namespace IceEvents
 
                 return false;
             }
+        }
+    }
+
+    public static class EventBufferParallelExtensions
+    {
+        /// <summary>
+        /// Creates a parallel event writer handle with specified batch count.
+        /// The batch count must match the number of batches that will write to the stream.
+        /// For IJobFor, this should match the batch count used in Schedule().
+        /// </summary>
+        public static ParallelEventWriterHandle<T> GetParallelWriter<T>(
+            this RefRW<EventBuffer<T>> buffer,
+            int batchCount,
+            Allocator allocator) where T : unmanaged, IEvent
+        {
+            if (batchCount <= 0)
+                throw new System.ArgumentException("Batch count must be greater than 0", nameof(batchCount));
+
+            var stream = new NativeStream(batchCount, allocator);
+            return new ParallelEventWriterHandle<T>
+            {
+                Writer = new ParallelEventWriter<T>
+                {
+                    Writer = stream.AsWriter()
+                },
+                Stream = stream
+            };
         }
     }
 }

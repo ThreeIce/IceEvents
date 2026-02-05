@@ -1,10 +1,71 @@
 using System;
 using System.Collections.Generic;
+using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using Unity.Jobs;
 
 namespace IceEvents
 {
+    /// <summary>
+    /// Job responsible for committing events from parallel writers (NativeStream) into the main EventBuffer.
+    /// <para>
+    /// <b>Requirement:</b> Use <code>[assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))]</code>
+    /// </para>
+    /// </summary>
+    [BurstCompile]
+    public struct EventCommitJob<T> : IJob where T : unmanaged, IEvent
+    {
+        [ReadOnly]
+        public NativeStream.Reader StreamReader;
+        public NativeList<T> BufferUpdate;
+        public NativeList<T> BufferFixed;
+
+        public unsafe void Execute()
+        {
+            int totalCount = StreamReader.Count();
+
+            EnsureCapacity(ref BufferUpdate, totalCount);
+            EnsureCapacity(ref BufferFixed, totalCount);
+
+            for (int i = 0; i < StreamReader.ForEachCount; i++)
+            {
+                StreamReader.BeginForEachIndex(i);
+                int count = StreamReader.RemainingItemCount;
+
+                for (int j = 0; j < count; j++)
+                {
+                    T item = StreamReader.Read<T>();
+                    BufferUpdate.AddNoResize(item);
+                    BufferFixed.AddNoResize(item);
+                }
+
+                StreamReader.EndForEachIndex();
+            }
+        }
+
+        private static void EnsureCapacity(ref NativeList<T> list, int additionalCount)
+        {
+            int needed = list.Length + additionalCount;
+            if (list.Capacity >= needed) return;
+            list.Capacity = NextPowerOfTwo(needed);
+        }
+
+        private static int NextPowerOfTwo(int value)
+        {
+            if (value <= 1) return 1;
+            value--;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            value++;
+            return value;
+        }
+    }
+
     /// <summary>
     /// Managed system responsible for the UPDATE loop buffer swap.
     /// </summary>
