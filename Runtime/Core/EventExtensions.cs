@@ -1,84 +1,88 @@
 using Unity.Entities;
 using Unity.Collections;
-using Unity.Mathematics;
 
 namespace IceEvents
 {
     public static class EventExtensions
     {
-        /// <summary>
-        /// Gets an EventWriter that writes to both Update and FixedUpdate loops.
-        /// Requires obtaining the singleton via SystemAPI.GetSingletonRW to ensure dependency tracking.
-        /// </summary>
         public static EventWriter<T> GetWriter<T>(this RefRW<EventBuffer<T>> buffer) where T : unmanaged, IEvent
         {
-            return buffer.ValueRO.GetWriter();
+            return new EventWriter<T>
+            {
+                BufferUpdate = buffer.ValueRW.BufferUpdateCurrent,
+                BufferFixed = buffer.ValueRW.BufferFixedCurrent
+            };
         }
 
-        /// <summary>
-        /// Gets an EventWriter directly from the buffer. 
-        /// Use this for testing or in contexts where RefRW is unavailable.
-        /// Warning: Does not provide dependency tracking.
-        /// </summary>
         public static EventWriter<T> GetWriter<T>(this in EventBuffer<T> buffer) where T : unmanaged, IEvent
         {
             return new EventWriter<T>
             {
-                WriterUpdate = buffer.BufferUpdateCurrent.AsParallelWriter(),
-                WriterFixed = buffer.BufferFixedCurrent.AsParallelWriter()
+                BufferUpdate = buffer.BufferUpdateCurrent,
+                BufferFixed = buffer.BufferFixedCurrent
             };
         }
 
-        /// <summary>
-        /// Gets a reader initialized to 0 (reads oldest available events).
-        /// </summary>
-        public static EventReader<T> GetReader<T>(this in EventBuffer<T> buffer, Allocator allocator) where T : unmanaged, IEvent
-        {
-            return new EventReader<T>(0, allocator);
-        }
+        public static EventReader<T> GetUpdateReader<T>(this in EventBuffer<T> buffer, ulong startId, Allocator allocator)
+            where T : unmanaged, IEvent
+            => new EventReader<T>(startId, EventLoopType.Update, allocator);
+
+        public static EventReader<T> GetFixedReader<T>(this in EventBuffer<T> buffer, ulong startId, Allocator allocator)
+            where T : unmanaged, IEvent
+            => new EventReader<T>(startId, EventLoopType.FixedUpdate, allocator);
+
+        public static EventReader<T> GetUpdateReader<T>(this in EventBuffer<T> buffer, Allocator allocator)
+            where T : unmanaged, IEvent
+            => new EventReader<T>(0, EventLoopType.Update, allocator);
+
+        public static EventReader<T> GetFixedReader<T>(this in EventBuffer<T> buffer, Allocator allocator)
+            where T : unmanaged, IEvent
+            => new EventReader<T>(0, EventLoopType.FixedUpdate, allocator);
     }
 
-    /// <summary>
-    /// A persistent cursor for reading events. 
-    /// Wraps a NativeArray to allow seamless bookmark updates when used inside Jobs.
-    /// Dispose() must be called when the reader is no longer needed.
-    /// </summary>
     public struct EventReader<T> : System.IDisposable where T : unmanaged, IEvent
     {
         private NativeArray<ulong> _bookmark;
+        private readonly EventLoopType _loopType;
 
-        /// <summary>
-        /// The ID of the last event read by this reader.
-        /// </summary>
-        public ulong LastReadID => _bookmark.IsCreated ? _bookmark[0] : 0;
+        private NativeList<T> _prev;
+        private NativeList<T> _curr;
+        private ulong _baseIdPrev;
 
-        public EventReader(ulong startId, Allocator allocator)
+        public EventReader(ulong startId, EventLoopType loopType, Allocator allocator)
         {
             _bookmark = new NativeArray<ulong>(1, allocator);
             _bookmark[0] = startId;
+            _loopType = loopType;
+            _prev = default;
+            _curr = default;
+            _baseIdPrev = 0;
+        }
+
+        public void Update(in EventBuffer<T> buffer)
+        {
+            if (_loopType == EventLoopType.Update)
+            {
+                _prev = buffer.BufferUpdatePrevious;
+                _curr = buffer.BufferUpdateCurrent;
+                _baseIdPrev = buffer.BaseIdUpdatePrev;
+            }
+            else
+            {
+                _prev = buffer.BufferFixedPrevious;
+                _curr = buffer.BufferFixedCurrent;
+                _baseIdPrev = buffer.BaseIdFixedPrev;
+            }
+        }
+
+        public Enumerator GetEnumerator()
+        {
+            return new Enumerator(_prev, _curr, _bookmark, _baseIdPrev);
         }
 
         public void Dispose()
         {
             if (_bookmark.IsCreated) _bookmark.Dispose();
-        }
-
-        /// <summary>
-        /// Reads new events since the last call in the Update loop context.
-        /// WARNING: A single EventReader instance is NOT thread-safe for concurrent reading (e.g., in a parallel Job).
-        /// </summary>
-        public Enumerator ReadUpdate(in EventBuffer<T> buffer)
-        {
-            return new Enumerator(buffer.BufferUpdatePrevious, buffer.BufferUpdateCurrent, _bookmark, buffer.BaseIdUpdatePrev);
-        }
-
-        /// <summary>
-        /// Reads new events since the last call in the FixedUpdate loop context.
-        /// WARNING: A single EventReader instance is NOT thread-safe for concurrent reading (e.g., in a parallel Job).
-        /// </summary>
-        public Enumerator ReadFixed(in EventBuffer<T> buffer)
-        {
-            return new Enumerator(buffer.BufferFixedPrevious, buffer.BufferFixedCurrent, _bookmark, buffer.BaseIdFixedPrev);
         }
 
         public struct Enumerator
@@ -102,22 +106,12 @@ namespace IceEvents
                 _baseIdCurr = baseIdPrev + (ulong)prev.Length;
                 _currentElement = default;
 
-                // Pre-calculate start indices
-                // We want to read events with ID > bookmark.
-                // IDs are 1-based: ID = Base + Index + 1.
-                // We want Base + Index + 1 > Bookmark
-                // Base + Index + 1 = Bookmark + 1 (Target ID)
                 ulong targetId = bookmark[0] + 1;
 
-                // Phase 1: Prev
-                // Index = TargetID - BaseID - 1
                 long relIndexPrev = (long)(targetId - _baseIdPrev) - 1;
-                // Clamp: If we are behind (relIndex < 0), start at 0.
                 if (relIndexPrev < 0) relIndexPrev = 0;
-                // Subtract 1 because MoveNext pre-increments
                 _indexPrev = (int)relIndexPrev - 1;
 
-                // Phase 2: Curr
                 long relIndexCurr = (long)(targetId - _baseIdCurr) - 1;
                 if (relIndexCurr < 0) relIndexCurr = 0;
                 _indexCurr = (int)relIndexCurr - 1;
@@ -127,18 +121,14 @@ namespace IceEvents
 
             public bool MoveNext()
             {
-                // Phase 1: Prev
                 if (_indexPrev < _prev.Length - 1)
                 {
                     _indexPrev++;
                     _currentElement = _prev[_indexPrev];
-                    // Immediate bookmark update
-                    // ID = Base + Index + 1
                     _bookmark[0] = _baseIdPrev + (ulong)_indexPrev + 1;
                     return true;
                 }
 
-                // Phase 2: Curr
                 if (_indexCurr < _curr.Length - 1)
                 {
                     _indexCurr++;
@@ -149,8 +139,6 @@ namespace IceEvents
 
                 return false;
             }
-
-            public Enumerator GetEnumerator() => this;
         }
     }
 }
