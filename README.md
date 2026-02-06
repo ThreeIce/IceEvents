@@ -162,11 +162,8 @@ public partial struct DamageMonitorSystem : ISystem
 
     public void OnCreate(ref SystemState state)
     {
-        // Require the singleton to exist
         state.RequireForUpdate<EventBuffer<DamageEvent>>();
-        
         var buffer = SystemAPI.GetSingletonBuffer<EventBuffer<DamageEvent>>();
-        // Create a persistent reader
         _reader = buffer.GetUpdateReader(Allocator.Persistent);
     }
 
@@ -174,22 +171,41 @@ public partial struct DamageMonitorSystem : ISystem
     {
         var buffer = SystemAPI.GetSingleton<EventBuffer<DamageEvent>>();
         
-        // Refresh reader with latest buffer data
-        // This is safe to call on Main Thread; can also pass to Jobs.
+        // 1. Update reader state on Main Thread (safe, just reading pointers)
         _reader.Update(buffer);
         
-        foreach (var evt in _reader)
+        // 2. Pass to Job (Zero Sync Point, fully async)
+        new DamageReaderJob
         {
-            UnityEngine.Debug.Log($"Damage Taken: {evt.Amount}");
-        }
+            Reader = _reader
+        }.Schedule();
     }
 
     public void OnDestroy(ref SystemState state)
     {
-        _reader.Dispose(); // Clean up native arrays
+        _reader.Dispose();
+    }
+}
+
+[BurstCompile]
+public struct DamageReaderJob : IJob
+{
+    public EventReader<DamageEvent> Reader;
+
+    public void Execute()
+    {
+        // Safe to iterate in parallel with writers (reading previous frame)
+        foreach (var evt in Reader)
+        {
+            // Logic here...
+        }
     }
 }
 ```
+
+> [!CAUTION]
+> **Main Thread Safety**: If you absolutely must read on the Main Thread (e.g., for `Debug.Log`), you **MUST** call `state.Dependency.Complete()` before iterating the reader. Failing to do so will cause race conditions with jobs writing to the buffer.
+
 
 You can choose between `GetUpdateReader()` (for `Update` loop events) and `GetFixedReader()` (for `FixedUpdate` / Physics loop events). Use the one matching your system's update rate.
 
