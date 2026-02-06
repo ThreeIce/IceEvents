@@ -69,7 +69,7 @@ namespace IceEvents
     /// <summary>
     /// System responsible for the UPDATE loop buffer swap.
     /// </summary>
-    [UpdateInGroup(typeof(InitializationSystemGroup))]
+    [UpdateInGroup(typeof(InitializationSystemGroup), OrderFirst = true)]
     public partial struct EventLifecycleUpdateSystem<T> : ISystem where T : unmanaged, IEvent
     {
         public readonly void OnCreate(ref SystemState state)
@@ -88,7 +88,7 @@ namespace IceEvents
             (buffer.ValueRW.BufferUpdateCurrent, buffer.ValueRW.BufferUpdatePrevious) = (buffer.ValueRW.BufferUpdatePrevious, buffer.ValueRW.BufferUpdateCurrent);
         }
 
-        internal static void EnsureBufferInitialized<TEvent>(EntityManager em) where TEvent : unmanaged, IEvent
+        private static void EnsureBufferInitialized<TEvent>(EntityManager em) where TEvent : unmanaged, IEvent
         {
             var query = em.CreateEntityQuery(ComponentType.ReadOnly<EventBuffer<TEvent>>());
             if (query.IsEmptyIgnoreFilter)
