@@ -53,28 +53,6 @@ namespace IceEvents
         public readonly EventReader<T> GetFixedReader(Allocator allocator)
             => new(0, EventLoopType.FixedUpdate, allocator);
 
-        /// <summary>
-        /// Creates a parallel event writer handle with specified batch count.
-        /// The batch count must match the number of batches that will write to the stream.
-        /// For IJobFor, this should match the batch count used in Schedule().
-        /// </summary>
-        public StreamParallelEventWriterHandle<T> GetStreamParallelWriter(int batchCount, Allocator allocator)
-        {
-            if (batchCount <= 0)
-                throw new System.ArgumentException("Batch count must be greater than 0", nameof(batchCount));
-
-            var stream = new NativeStream(batchCount, allocator);
-            return new StreamParallelEventWriterHandle<T>
-            {
-                Writer = new StreamParallelEventWriter<T>
-                {
-                    Writer = stream.AsWriter()
-                },
-                Stream = stream,
-                BufferUpdate = BufferUpdateCurrent,
-                BufferFixed = BufferFixedCurrent
-            };
-        }
     }
 
     public struct EventWriter<T> where T : unmanaged, IEvent
@@ -89,90 +67,6 @@ namespace IceEvents
         }
     }
 
-    /// <summary>
-    /// Parallel event writer wrapping NativeStream.Writer for concurrent event writing.
-    /// Requires BeginForEachIndex/EndForEachIndex calls to mark writing scope per thread.
-    /// </summary>
-    public struct StreamParallelEventWriter<T> where T : unmanaged, IEvent
-    {
-        internal NativeStream.Writer Writer;
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public void BeginForEachIndex(int threadIndex)
-        {
-            Writer.BeginForEachIndex(threadIndex);
-        }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public void Write(T eventData)
-        {
-            Writer.Write(eventData);
-        }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public void EndForEachIndex()
-        {
-            Writer.EndForEachIndex();
-        }
-    }
-
-    /// <summary>
-    /// Handle for parallel event writer that manages the underlying NativeStream lifecycle.
-    /// </summary>
-    public struct StreamParallelEventWriterHandle<T> : IDisposable where T : unmanaged, IEvent
-    {
-        public StreamParallelEventWriter<T> Writer;
-        internal NativeStream Stream;
-        internal NativeList<T> BufferUpdate;
-        internal NativeList<T> BufferFixed;
-
-        /// <summary>
-        /// Always use ScheduleCommit. Use this only when you know what you are doing.
-        /// </summary>
-        public void Dispose()
-        {
-            Stream.Dispose();
-        }
-
-        /// <summary>
-        /// Schedules the commit job to merge parallel-written events into the target buffer.
-        /// Automatically disposes the NativeStream after the commit job completes.
-        /// Returns the new dependency handle that includes both the commit job and stream disposal.
-        /// <para>
-        /// <b>IMPORTANT:</b> You must register the commit job for your event type at the assembly level for Burst support:
-        /// <code>[assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))]</code>
-        /// </para>
-        /// </summary>
-        /// <param name="inputDeps">Input dependencies that must complete before commit</param>
-        /// <returns>JobHandle that completes after commit and stream disposal</returns>
-        public JobHandle ScheduleCommit(JobHandle inputDeps)
-        {
-            var job = new EventCommitJob<T>
-            {
-                StreamReader = Stream.AsReader(),
-                BufferUpdate = BufferUpdate,
-                BufferFixed = BufferFixed
-            };
-
-            var commitHandle = job.Schedule(inputDeps);
-            var disposeHandle = Stream.Dispose(commitHandle);
-            return disposeHandle;
-        }
-
-        /// <summary>
-        /// Schedules the commit job and automatically updates SystemState.Dependency.
-        /// This is the recommended API for ISystem implementations as it handles dependency chaining automatically.
-        /// <para>
-        /// <b>IMPORTANT:</b> You must register the commit job for your event type at the assembly level for Burst support:
-        /// <code>[assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))]</code>
-        /// </para>
-        /// </summary>
-        /// <param name="state">System state for automatic dependency binding</param>
-        public void ScheduleCommit(ref SystemState state)
-        {
-            state.Dependency = ScheduleCommit(state.Dependency);
-        }
-    }
 
     public enum EventLoopType { Update, FixedUpdate }
 

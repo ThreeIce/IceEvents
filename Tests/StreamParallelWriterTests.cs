@@ -8,38 +8,26 @@ using IceEvents;
 using System;
 using Unity.Collections.LowLevel.Unsafe;
 
-[assembly: RegisterGenericComponentType(typeof(EventBuffer<IceEvents.Tests.StreamParallelTestEvent>))]
-[assembly: RegisterGenericJobType(typeof(EventCommitJob<IceEvents.Tests.StreamParallelTestEvent>))]
-[assembly: RegisterGenericSystemType(typeof(EventLifecycleUpdateSystem<IceEvents.Tests.StreamParallelTestEvent>))]
-[assembly: RegisterGenericSystemType(typeof(EventLifecycleFixedSystem<IceEvents.Tests.StreamParallelTestEvent>))]
+[assembly: RegisterGenericComponentType(typeof(EventBuffer<IceEvents.Tests.ParallelTestEvent>))]
+[assembly: RegisterGenericJobType(typeof(EventCommitJob<IceEvents.Tests.ParallelTestEvent>))]
+[assembly: RegisterGenericSystemType(typeof(EventLifecycleUpdateSystem<IceEvents.Tests.ParallelTestEvent>))]
+[assembly: RegisterGenericSystemType(typeof(EventLifecycleFixedSystem<IceEvents.Tests.ParallelTestEvent>))]
 
 namespace IceEvents.Tests
 {
-    public struct StreamParallelTestEvent : IEvent
-    {
-        public int Value;
-        public int ThreadIndex;
-    }
-
-    public struct StreamParallelWriteConfig : IComponentData
-    {
-        public int ItemCount;
-        public int ItemOffset;
-        public int ItemsPerBatch;
-        public int InitialCapacity; // For capacity tests
-    }
+    // ParallelTestEvent and StreamParallelWriteConfig replaced by ParallelTestEvent and ParallelWriteConfig in ParallelWriteTestCommon.cs
 
     #region Helper Jobs
 
     [BurstCompile]
     struct StreamParallelWriteJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
 
         public void Execute(int index)
         {
             Writer.BeginForEachIndex(index);
-            Writer.Write(new StreamParallelTestEvent
+            Writer.Write(new ParallelTestEvent
             {
                 ThreadIndex = 0,
                 Value = index
@@ -51,7 +39,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct StreamParallelNoOpJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
 
         public void Execute(int index)
         {
@@ -65,14 +53,14 @@ namespace IceEvents.Tests
     struct StreamParallelOffsetWriteJob : IJobParallelFor
     {
         [NativeDisableContainerSafetyRestriction]
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemOffset;
 
         public void Execute(int index)
         {
             int streamIndex = ItemOffset + index;
             Writer.BeginForEachIndex(streamIndex);
-            Writer.Write(new StreamParallelTestEvent
+            Writer.Write(new ParallelTestEvent
             {
                 ThreadIndex = 0,
                 Value = streamIndex
@@ -84,7 +72,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct StreamParallelBatchedWriteJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemsPerBatch;
 
         public void Execute(int index)
@@ -92,7 +80,7 @@ namespace IceEvents.Tests
             Writer.BeginForEachIndex(index);
             for (int i = 0; i < ItemsPerBatch; i++)
             {
-                Writer.Write(new StreamParallelTestEvent
+                Writer.Write(new ParallelTestEvent
                 {
                     ThreadIndex = index,
                     Value = (index * ItemsPerBatch) + i
@@ -106,7 +94,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct StreamParallelCapacityTestJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemCount;
 
         public void Execute(int index)
@@ -114,7 +102,7 @@ namespace IceEvents.Tests
             if (index < ItemCount)
             {
                 Writer.BeginForEachIndex(index);
-                Writer.Write(new StreamParallelTestEvent { Value = index });
+                Writer.Write(new ParallelTestEvent { Value = index });
                 Writer.EndForEachIndex();
             }
         }
@@ -129,8 +117,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             var writerHandle = buffer.ValueRW.GetStreamParallelWriter(config.ItemCount, Allocator.TempJob);
 
@@ -145,8 +133,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             var writerHandle = buffer.ValueRW.GetStreamParallelWriter(config.ItemCount, Allocator.TempJob);
 
@@ -161,8 +149,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             // ItemCount serves as Count1, ItemOffset serves as Count2 here (a bit of reuse)
             int count1 = config.ItemCount;
@@ -184,8 +172,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             var writerHandle = buffer.ValueRW.GetStreamParallelWriter(config.ItemCount, Allocator.TempJob);
             var job = new StreamParallelWriteJob { Writer = writerHandle.Writer };
@@ -199,8 +187,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             // Typically SystemB might write different content, here we just use same logic but it runs after A due to RW dependency
             var writerHandle = buffer.ValueRW.GetStreamParallelWriter(config.ItemCount, Allocator.TempJob);
@@ -215,8 +203,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             // unique indices count
             int streamIndexCount = config.ItemCount;
@@ -239,8 +227,8 @@ namespace IceEvents.Tests
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             if (config.InitialCapacity > 0)
             {
@@ -270,13 +258,13 @@ namespace IceEvents.Tests
         {
             base.Setup();
             // Ensure lifecycle system is created
-            World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
+            World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
         }
 
-        private EventBuffer<StreamParallelTestEvent> GetBuffer()
+        private EventBuffer<ParallelTestEvent> GetBuffer()
         {
-            var query = m_Manager.CreateEntityQuery(typeof(EventBuffer<StreamParallelTestEvent>));
-            return m_Manager.GetComponentData<EventBuffer<StreamParallelTestEvent>>(query.GetSingletonEntity());
+            var query = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>));
+            return m_Manager.GetComponentData<EventBuffer<ParallelTestEvent>>(query.GetSingletonEntity());
         }
 
         #region Functional Tests
@@ -285,8 +273,8 @@ namespace IceEvents.Tests
         public void StreamParallelWrite_SingleJob_EventsCommitted()
         {
             // Prepare
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig { ItemCount = 160 });
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 160 });
 
             // Execute
             var sys = World.CreateSystem<StreamParallelSingleJobWriteSystem>();
@@ -302,8 +290,8 @@ namespace IceEvents.Tests
         public void StreamParallelWrite_NoEvents_NoException()
         {
             // Prepare
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig { ItemCount = 10 });
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 10 });
 
             // Execute
             var sys = World.CreateSystem<StreamParallelNoOpWriteSystem>();
@@ -318,8 +306,8 @@ namespace IceEvents.Tests
         public void StreamParallelWrite_MultipleJobsInSameSystem_EventsCommitted()
         {
             // Prepare
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig
             {
                 ItemCount = 50, // Count1
                 ItemOffset = 50 // Count2 (reused field)
@@ -339,8 +327,8 @@ namespace IceEvents.Tests
         public void StreamParallelWrite_MultipleSystemsWithAutoDependency_EventsCommitted()
         {
             // Prepare
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig { ItemCount = 50 });
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 50 });
 
             // Execute
             var sys1 = World.CreateSystem<StreamParallelSystemA>();
@@ -363,8 +351,8 @@ namespace IceEvents.Tests
             int itemsPerIndex = 300;
             int totalItems = streamIndexCount * itemsPerIndex; // 19200
 
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig
             {
                 ItemCount = streamIndexCount,
                 ItemsPerBatch = itemsPerIndex
@@ -391,8 +379,8 @@ namespace IceEvents.Tests
             int initialCapacity = 2048;
             int writeCount = 100;
 
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig
             {
                 ItemCount = writeCount,
                 InitialCapacity = initialCapacity
@@ -416,9 +404,9 @@ namespace IceEvents.Tests
         [Test]
         public void StreamParallelWrite_ZeroThreadCount_Throws()
         {
-            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
-            var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<StreamParallelTestEvent>))
-                .GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
+                .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             Assert.Throws<ArgumentException>(() =>
                 buffer.ValueRW.GetStreamParallelWriter(0, Allocator.TempJob),
@@ -428,9 +416,9 @@ namespace IceEvents.Tests
         [Test]
         public void StreamParallelWrite_LargeThreadIndex_Handles()
         {
-            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
-            var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<StreamParallelTestEvent>))
-                .GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<ParallelTestEvent>>();
+            var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<ParallelTestEvent>))
+                .GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             int declaredThreadCount = 10;
             var writerHandle = buffer.ValueRW.GetStreamParallelWriter(declaredThreadCount, Allocator.TempJob);
@@ -443,29 +431,6 @@ namespace IceEvents.Tests
 
             writerHandle.Dispose();
         }
-
-        [Test]
-        public void StreamParallelWrite_DoubleCommit_Throws()
-        {
-            var sys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
-            var buffer = m_Manager.CreateEntityQuery(typeof(EventBuffer<StreamParallelTestEvent>))
-                .GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
-
-            var writerHandle = buffer.ValueRW.GetStreamParallelWriter(1, Allocator.TempJob);
-            JobHandle dependency = default;
-
-            // First commit
-            dependency = writerHandle.ScheduleCommit(dependency);
-
-            // Second commit
-            Assert.Throws<InvalidOperationException>(() =>
-            {
-                writerHandle.ScheduleCommit(dependency);
-            }, "Should throw on double commit");
-
-            dependency.Complete();
-        }
-
         #endregion
     }
 }

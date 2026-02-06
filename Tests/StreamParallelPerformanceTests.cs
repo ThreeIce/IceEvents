@@ -10,15 +10,13 @@ using Unity.PerformanceTesting;
 
 namespace IceEvents.Tests
 {
-    // Reuse StreamParallelTestEvent and StreamParallelWriteConfig from StreamParallelWriterTests.cs
-
     [DisableAutoCreation]
     partial struct StreamParallelStressWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingleton<StreamParallelWriteConfig>();
-            var buffer = SystemAPI.GetSingletonRW<EventBuffer<StreamParallelTestEvent>>();
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
             // Check if we need to force capacity (for capacity growth test)
             if (config.InitialCapacity > 0)
@@ -60,7 +58,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct StressTestJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemsPerBatch;
         public int TotalLimit;
 
@@ -71,7 +69,7 @@ namespace IceEvents.Tests
             for (int i = 0; i < ItemsPerBatch; i++)
             {
                 // Simple write loop
-                Writer.Write(new StreamParallelTestEvent { Value = baseVal + i });
+                Writer.Write(new ParallelTestEvent { Value = baseVal + i });
             }
             Writer.EndForEachIndex();
         }
@@ -80,104 +78,41 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct StressTestSingleItemJob : IJobParallelFor
     {
-        public StreamParallelEventWriter<StreamParallelTestEvent> Writer;
+        public StreamParallelEventWriter<ParallelTestEvent> Writer;
         public void Execute(int index)
         {
             Writer.BeginForEachIndex(index);
-            Writer.Write(new StreamParallelTestEvent { Value = index });
+            Writer.Write(new ParallelTestEvent { Value = index });
             Writer.EndForEachIndex();
         }
     }
 
     [TestFixture]
-    public class StreamParallelPerformanceTests : ECSTestsFixture
+    public class StreamParallelPerformanceTests : ParallelPerformanceTestBase
     {
-        [SetUp]
-        public override void Setup()
-        {
-            base.Setup();
-            // Ensure lifecycle system is created
-            World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
-        }
-
         [Test, Performance]
         public void StreamParallelWrite_Stress_100K_Events()
         {
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
-
             int totalEvents = 100_000;
             int batchCount = 2048;
             int itemsPerBatch = totalEvents / batchCount + 1;
 
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
-            {
-                ItemCount = batchCount,
-                ItemsPerBatch = itemsPerBatch
-            });
-
-            var sys = World.CreateSystem<StreamParallelStressWriteSystem>();
-
-            Measure.Method(() =>
-            {
-                sys.Update(World.Unmanaged);
-                m_Manager.CompleteAllTrackedJobs();
-            })
-            .WarmupCount(3)
-            .MeasurementCount(10)
-            .Run();
+            RunStressTest<StreamParallelStressWriteSystem>(batchCount, itemsPerBatch);
         }
 
         [Test, Performance]
         public void StreamParallelWrite_Stress_HighFrequency_1000Frames()
         {
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
             int dailyCount = 1000; // 1000 events per frame
-
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
-            {
-                ItemCount = dailyCount,
-                ItemsPerBatch = 1 // Single item per index
-            });
-
-            var sys = World.CreateSystem<StreamParallelStressWriteSystem>();
-            var lifecycleSys = World.GetOrCreateSystem<EventLifecycleUpdateSystem<StreamParallelTestEvent>>();
-
-            Measure.Method(() =>
-            {
-                sys.Update(World.Unmanaged);
-                m_Manager.CompleteAllTrackedJobs();
-
-                // Simulate frame end lifecycle
-                lifecycleSys.Update(World.Unmanaged);
-            })
-            .WarmupCount(1)
-            .MeasurementCount(10)
-            .Run();
+            // Single item per index, 1000 indices
+            RunStressTestWithLifecycle<StreamParallelStressWriteSystem>(dailyCount, 1);
         }
 
         [Test, Performance]
         public void StreamParallelWrite_Stress_CapacityGrowth()
         {
-            var configEntity = m_Manager.CreateEntity(typeof(StreamParallelWriteConfig));
             int totalEvents = 100_000;
-
-            // Force reset to small capacity on each run via system logic using InitialCapacity config
-            m_Manager.SetComponentData(configEntity, new StreamParallelWriteConfig
-            {
-                ItemCount = totalEvents,
-                ItemsPerBatch = 1,
-                InitialCapacity = 128
-            });
-
-            var sys = World.CreateSystem<StreamParallelStressWriteSystem>();
-
-            Measure.Method(() =>
-            {
-                sys.Update(World.Unmanaged);
-                m_Manager.CompleteAllTrackedJobs();
-            })
-            .MeasurementCount(10)
-            .Run();
+            RunStressTest<StreamParallelStressWriteSystem>(totalEvents, 1, 128);
         }
     }
 }

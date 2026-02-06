@@ -19,12 +19,15 @@ namespace IceEvents
     {
         [ReadOnly]
         public NativeStream.Reader StreamReader;
+        public NativeQueue<T> Queue;
         public NativeList<T> BufferUpdate;
         public NativeList<T> BufferFixed;
 
         public unsafe void Execute()
         {
-            int totalCount = StreamReader.Count();
+            int streamCount = StreamReader.Count();
+            int queueCount = Queue.Count;
+            int totalCount = streamCount + queueCount;
 
             EnsureCapacity(ref BufferUpdate, totalCount);
             EnsureCapacity(ref BufferFixed, totalCount);
@@ -42,6 +45,12 @@ namespace IceEvents
                 }
 
                 StreamReader.EndForEachIndex();
+            }
+
+            while (Queue.TryDequeue(out var item))
+            {
+                BufferUpdate.AddNoResize(item);
+                BufferFixed.AddNoResize(item);
             }
         }
 
