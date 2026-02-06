@@ -14,7 +14,7 @@ namespace IceEvents
     /// [assembly: RegisterGenericComponentType(typeof(EventBuffer&lt;MyEvent&gt;))]
     /// [assembly: RegisterGenericSystemType(typeof(EventLifecycleUpdateSystem&lt;MyEvent&gt;))]
     /// [assembly: RegisterGenericSystemType(typeof(EventLifecycleFixedSystem&lt;MyEvent&gt;))]
-    /// [assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))] // Optional: Only if using ParallelEventWriter
+    /// [assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))] // Optional: Only if using StreamParallelEventWriter
     /// </code>
     /// </para>
     /// </summary>
@@ -58,19 +58,21 @@ namespace IceEvents
         /// The batch count must match the number of batches that will write to the stream.
         /// For IJobFor, this should match the batch count used in Schedule().
         /// </summary>
-        public ParallelEventWriterHandle<T> GetParallelWriter(int batchCount, Allocator allocator)
+        public StreamParallelEventWriterHandle<T> GetStreamParallelWriter(int batchCount, Allocator allocator)
         {
             if (batchCount <= 0)
                 throw new System.ArgumentException("Batch count must be greater than 0", nameof(batchCount));
 
             var stream = new NativeStream(batchCount, allocator);
-            return new ParallelEventWriterHandle<T>
+            return new StreamParallelEventWriterHandle<T>
             {
-                Writer = new ParallelEventWriter<T>
+                Writer = new StreamParallelEventWriter<T>
                 {
                     Writer = stream.AsWriter()
                 },
-                Stream = stream
+                Stream = stream,
+                BufferUpdate = BufferUpdateCurrent,
+                BufferFixed = BufferFixedCurrent
             };
         }
     }
@@ -91,7 +93,7 @@ namespace IceEvents
     /// Parallel event writer wrapping NativeStream.Writer for concurrent event writing.
     /// Requires BeginForEachIndex/EndForEachIndex calls to mark writing scope per thread.
     /// </summary>
-    public struct ParallelEventWriter<T> where T : unmanaged, IEvent
+    public struct StreamParallelEventWriter<T> where T : unmanaged, IEvent
     {
         internal NativeStream.Writer Writer;
 
@@ -117,10 +119,12 @@ namespace IceEvents
     /// <summary>
     /// Handle for parallel event writer that manages the underlying NativeStream lifecycle.
     /// </summary>
-    public struct ParallelEventWriterHandle<T> : IDisposable where T : unmanaged, IEvent
+    public struct StreamParallelEventWriterHandle<T> : IDisposable where T : unmanaged, IEvent
     {
-        public ParallelEventWriter<T> Writer;
+        public StreamParallelEventWriter<T> Writer;
         internal NativeStream Stream;
+        internal NativeList<T> BufferUpdate;
+        internal NativeList<T> BufferFixed;
 
         /// <summary>
         /// Always use ScheduleCommit. Use this only when you know what you are doing.
@@ -133,25 +137,40 @@ namespace IceEvents
         /// <summary>
         /// Schedules the commit job to merge parallel-written events into the target buffer.
         /// Automatically disposes the NativeStream after the commit job completes.
+        /// Returns the new dependency handle that includes both the commit job and stream disposal.
         /// <para>
         /// <b>IMPORTANT:</b> You must register the commit job for your event type at the assembly level for Burst support:
         /// <code>[assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))]</code>
         /// </para>
         /// </summary>
-        public void ScheduleCommit(
-            RefRW<EventBuffer<T>> targetBuffer,
-            ref JobHandle dependency)
+        /// <param name="inputDeps">Input dependencies that must complete before commit</param>
+        /// <returns>JobHandle that completes after commit and stream disposal</returns>
+        public JobHandle ScheduleCommit(JobHandle inputDeps)
         {
             var job = new EventCommitJob<T>
             {
                 StreamReader = Stream.AsReader(),
-                BufferUpdate = targetBuffer.ValueRW.BufferUpdateCurrent,
-                BufferFixed = targetBuffer.ValueRW.BufferFixedCurrent
+                BufferUpdate = BufferUpdate,
+                BufferFixed = BufferFixed
             };
 
-            var commitHandle = job.Schedule(dependency);
+            var commitHandle = job.Schedule(inputDeps);
             var disposeHandle = Stream.Dispose(commitHandle);
-            dependency = disposeHandle;
+            return disposeHandle;
+        }
+
+        /// <summary>
+        /// Schedules the commit job and automatically updates SystemState.Dependency.
+        /// This is the recommended API for ISystem implementations as it handles dependency chaining automatically.
+        /// <para>
+        /// <b>IMPORTANT:</b> You must register the commit job for your event type at the assembly level for Burst support:
+        /// <code>[assembly: RegisterGenericJobType(typeof(EventCommitJob&lt;MyEvent&gt;))]</code>
+        /// </para>
+        /// </summary>
+        /// <param name="state">System state for automatic dependency binding</param>
+        public void ScheduleCommit(ref SystemState state)
+        {
+            state.Dependency = ScheduleCommit(state.Dependency);
         }
     }
 

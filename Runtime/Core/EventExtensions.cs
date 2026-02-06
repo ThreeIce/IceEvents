@@ -31,12 +31,12 @@ namespace IceEvents
         /// The batch count must match the number of batches that will write to the stream.
         /// For IJobFor, this should match the batch count used in Schedule().
         /// </summary>
-        public static ParallelEventWriterHandle<T> GetParallelWriter<T>(
+        public static StreamParallelEventWriterHandle<T> GetStreamParallelWriter<T>(
             this RefRW<EventBuffer<T>> buffer,
             int batchCount,
             Allocator allocator) where T : unmanaged, IEvent
         {
-            return buffer.ValueRW.GetParallelWriter(batchCount, allocator);
+            return buffer.ValueRW.GetStreamParallelWriter(batchCount, allocator);
         }
     }
 }
