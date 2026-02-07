@@ -41,6 +41,7 @@ namespace IceEvents
         internal NativeStream Stream;
         internal NativeList<T> BufferUpdate;
         internal NativeList<T> BufferFixed;
+        private bool m_Committed;
 
         /// <summary>
         /// Always use ScheduleCommit. Use this only when you know what you are doing.
@@ -56,8 +57,10 @@ namespace IceEvents
         /// </summary>
         public JobHandle ScheduleCommit(JobHandle inputDeps)
         {
-            if (!Stream.IsCreated)
+            if (m_Committed || !Stream.IsCreated)
                 return inputDeps;
+
+            m_Committed = true;
 
             // [SAFE] Allocate dummy queue so Safety System is happy.
             // Since it's TempJob, we must dispose it.

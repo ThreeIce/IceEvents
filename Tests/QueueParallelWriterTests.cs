@@ -235,6 +235,22 @@ namespace IceEvents.Tests
 
     #endregion
 
+    [DisableAutoCreation]
+    partial struct ParallelDoubleCommitSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
+
+            // Commit once
+            writerHandle.ScheduleCommit(ref state);
+
+            // Commit twice - should be safe now and not schedule a second job
+            writerHandle.ScheduleCommit(ref state);
+        }
+    }
+
     [TestFixture]
     public partial class ParallelWriterTests : ECSTestsFixture
     {
@@ -358,6 +374,16 @@ namespace IceEvents.Tests
             Assert.AreEqual(writeCount, buffer.BufferUpdateCurrent.Length);
             Assert.AreEqual(initialCapacity, buffer.BufferUpdateCurrent.Capacity);
         }
+        [Test]
+        public void ParallelWrite_DoubleCommit_DoesNotThrow()
+        {
+            var sys = World.CreateSystem<ParallelDoubleCommitSystem>();
+            Assert.DoesNotThrow(() => sys.Update(World.Unmanaged));
+
+            // Optional: Verify that dependency chain is valid (no error)
+            m_Manager.CompleteAllTrackedJobs();
+        }
+
         #endregion
     }
 }

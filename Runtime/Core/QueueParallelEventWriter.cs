@@ -28,6 +28,7 @@ namespace IceEvents
         internal NativeQueue<T> Queue;
         internal NativeList<T> BufferUpdate;
         internal NativeList<T> BufferFixed;
+        private bool m_Committed;
 
         public void Dispose()
         {
@@ -40,8 +41,10 @@ namespace IceEvents
         /// </summary>
         public JobHandle ScheduleCommit(JobHandle inputDeps)
         {
-            if (!Queue.IsCreated)
+            if (m_Committed || !Queue.IsCreated)
                 return inputDeps;
+
+            m_Committed = true;
 
             // [SAFE] Allocate dummy stream so Safety System is happy.
             var dummyStream = new NativeStream(1, Allocator.TempJob);

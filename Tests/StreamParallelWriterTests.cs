@@ -250,6 +250,23 @@ namespace IceEvents.Tests
 
     #endregion
 
+    [DisableAutoCreation]
+    partial struct StreamParallelDoubleCommitSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
+            var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
+            var writerHandle = buffer.ValueRW.GetStreamParallelWriter(config.ItemCount, Allocator.TempJob);
+
+            // Commit once
+            writerHandle.ScheduleCommit(ref state);
+
+            // Commit twice
+            writerHandle.ScheduleCommit(ref state);
+        }
+    }
+
     [TestFixture]
     public partial class StreamParallelWriterTests : ECSTestsFixture
     {
@@ -395,6 +412,17 @@ namespace IceEvents.Tests
             var buffer = GetBuffer();
             Assert.AreEqual(writeCount, buffer.BufferUpdateCurrent.Length);
             Assert.AreEqual(initialCapacity, buffer.BufferUpdateCurrent.Capacity, "Capacity should not change if sufficient");
+        }
+
+        [Test]
+        public void StreamParallelWrite_DoubleCommit_DoesNotThrow()
+        {
+            var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
+            m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 10 });
+
+            var sys = World.CreateSystem<StreamParallelDoubleCommitSystem>();
+            Assert.DoesNotThrow(() => sys.Update(World.Unmanaged));
+            m_Manager.CompleteAllTrackedJobs();
         }
 
         #endregion
