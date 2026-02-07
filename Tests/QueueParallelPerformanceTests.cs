@@ -10,14 +10,14 @@ using Unity.PerformanceTesting;
 namespace IceEvents.Tests
 {
     [DisableAutoCreation]
-    partial struct QueueParallelStressWriteSystem : ISystem
+    partial struct ParallelStressWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
             var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
             int jobCount = config.ItemCount;
 
@@ -47,7 +47,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct QueueStressTestJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemsPerBatch;
         public int BaseOffset;
 
@@ -65,7 +65,7 @@ namespace IceEvents.Tests
     [BurstCompile]
     struct QueueStressTestSingleItemJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
 
         public void Execute(int index)
         {
@@ -74,32 +74,32 @@ namespace IceEvents.Tests
     }
 
     [TestFixture]
-    public class QueueParallelPerformanceTests : ParallelPerformanceTestBase
+    public class ParallelPerformanceTests : ParallelPerformanceTestBase
     {
         [Test, Performance]
-        public void QueueParallelWrite_Stress_100K_Events()
+        public void ParallelWrite_Stress_100K_Events()
         {
             int totalEvents = 100_000;
             int batchCount = 2048; // Number of parallel jobs
             int itemsPerBatch = totalEvents / batchCount + 1;
 
-            RunStressTest<QueueParallelStressWriteSystem>(batchCount, itemsPerBatch);
+            RunStressTest<ParallelStressWriteSystem>(batchCount, itemsPerBatch);
         }
 
         [Test, Performance]
-        public void QueueParallelWrite_Stress_HighFrequency_1000Frames()
+        public void ParallelWrite_Stress_HighFrequency_1000Frames()
         {
             int dailyCount = 1000; // 1000 events per frame
             // 1000 jobs, 1 item per job
-            RunStressTestWithLifecycle<QueueParallelStressWriteSystem>(dailyCount, 1);
+            RunStressTestWithLifecycle<ParallelStressWriteSystem>(dailyCount, 1);
         }
 
         [Test, Performance]
-        public void QueueParallelWrite_Stress_CapacityGrowth()
+        public void ParallelWrite_Stress_CapacityGrowth()
         {
             int totalEvents = 100_000;
             // Force low initial capacity to trigger NativeQueue blocks allocation
-            RunStressTest<QueueParallelStressWriteSystem>(totalEvents, 1, 128);
+            RunStressTest<ParallelStressWriteSystem>(totalEvents, 1, 128);
         }
     }
 }

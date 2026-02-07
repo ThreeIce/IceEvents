@@ -53,7 +53,7 @@ using IceEvents;
 [assembly: RegisterGenericSystemType(typeof(EventLifecycleUpdateSystem<DamageEvent>))]
 [assembly: RegisterGenericSystemType(typeof(EventLifecycleFixedSystem<DamageEvent>))]
 
-// Required ONLY if you use Parallel Writing (QueueParallel or StreamParallel)
+// Required ONLY if you use Parallel Writing (Parallel or StreamParallel)
 [assembly: RegisterGenericJobType(typeof(EventCommitJob<DamageEvent>))]
 ```
 
@@ -93,7 +93,7 @@ struct ProcessLogicJob : IJob
 ```
 
 ### B. Queue Parallel (Recommended for Jobs)
-The `QueueParallelEventWriter` is the preferred way to write events from parallel jobs like `IJobEntity`. It is robust and easy to use.
+The `ParallelEventWriter` is the preferred way to write events from parallel jobs like `IJobEntity`. It is robust and easy to use.
 
 ```csharp
 [BurstCompile]
@@ -104,7 +104,7 @@ public partial struct CollisionSystem : ISystem
         var buffer = SystemAPI.GetSingletonRW<EventBuffer<CollisionEvent>>();
         
         // Create a parallel writer handle
-        var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+        var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
         
         // Schedule your job
         new CollisionJob 
@@ -120,7 +120,7 @@ public partial struct CollisionSystem : ISystem
 [BurstCompile]
 partial struct CollisionJob : IJobEntity
 {
-    public QueueParallelEventWriter<CollisionEvent> Writer;
+    public ParallelEventWriter<CollisionEvent> Writer;
     
     void Execute(in Collision collision, in Entity entity)
     {
@@ -211,7 +211,7 @@ You can choose between `GetUpdateReader()` (for `Update` loop events) and `GetFi
 
 ## Best Practices
 
-1.  **Prefer `QueueParallelEventWriter`**: It handles load balancing automatically and prevents index out-of-bounds errors common with manual streams.
+1.  **Prefer `ParallelEventWriter`**: It handles load balancing automatically and prevents index out-of-bounds errors common with manual streams.
 2.  **JobDeps**: When using parallel writers, always call `ScheduleCommit(ref state)`. This ensures that the temporary parallel buffers are merged into the main event list and that `state.Dependency` is correctly chained.
 3.  **Main Thread Safety**: If you must write on the main thread, call `state.Dependency.Complete()` *before* accessing `SystemAPI.GetSingletonRW`.
 4.  **Registration**: If you get "Unknown Type" errors, double-check your `[assembly: RegisterGeneric...]` attributes.

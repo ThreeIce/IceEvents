@@ -8,7 +8,7 @@ namespace IceEvents
     /// Parallel event writer wrapping NativeQueue.ParallelWriter for concurrent event writing.
     /// Simpler to use than StreamParallelEventWriter as it doesn't require batch indices.
     /// </summary>
-    public struct QueueParallelEventWriter<T> where T : unmanaged, IEvent
+    public struct ParallelEventWriter<T> where T : unmanaged, IEvent
     {
         internal NativeQueue<T>.ParallelWriter Writer;
 
@@ -22,9 +22,9 @@ namespace IceEvents
     /// <summary>
     /// Handle for queue-based parallel event writer that manages the underlying NativeQueue lifecycle.
     /// </summary>
-    public struct QueueParallelEventWriterHandle<T> : System.IDisposable where T : unmanaged, IEvent
+    public struct ParallelEventWriterHandle<T> : System.IDisposable where T : unmanaged, IEvent
     {
-        public QueueParallelEventWriter<T> Writer;
+        public ParallelEventWriter<T> Writer;
         internal NativeQueue<T> Queue;
         internal NativeList<T> BufferUpdate;
         internal NativeList<T> BufferFixed;
@@ -71,23 +71,23 @@ namespace IceEvents
     }
 
     /// <summary>
-    /// Extension methods for EventBuffer to support QueueParallelWriter.
+    /// Extension methods for EventBuffer to support ParallelWriter.
     /// </summary>
-    public static class QueueParallelEventBufferExtensions
+    public static class ParallelEventBufferExtensions
     {
         /// <summary>
         /// Creates a queue-based parallel event writer handle.
         /// Use this when you don't want to manage batch indices manually.
         /// </summary>
-        public static QueueParallelEventWriterHandle<T> GetQueueParallelWriter<T>(
+        public static ParallelEventWriterHandle<T> GetParallelWriter<T>(
             this ref EventBuffer<T> buffer,
             Allocator allocator) where T : unmanaged, IEvent
         {
             var queue = new NativeQueue<T>(allocator);
 
-            return new QueueParallelEventWriterHandle<T>
+            return new ParallelEventWriterHandle<T>
             {
-                Writer = new QueueParallelEventWriter<T>
+                Writer = new ParallelEventWriter<T>
                 {
                     Writer = queue.AsParallelWriter()
                 },

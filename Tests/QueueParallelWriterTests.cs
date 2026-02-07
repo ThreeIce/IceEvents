@@ -17,9 +17,9 @@ namespace IceEvents.Tests
     #region Helper Jobs for Queue
 
     [BurstCompile]
-    struct QueueParallelWriteJob : IJobParallelFor
+    struct ParallelWriteJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
 
         public void Execute(int index)
         {
@@ -33,9 +33,9 @@ namespace IceEvents.Tests
     }
 
     [BurstCompile]
-    struct QueueParallelNoOpJob : IJobParallelFor
+    struct ParallelNoOpJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
 
         public void Execute(int index)
         {
@@ -44,9 +44,9 @@ namespace IceEvents.Tests
     }
 
     [BurstCompile]
-    struct QueueParallelMultiJobWriteJob : IJobParallelFor
+    struct ParallelMultiJobWriteJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemOffset;
 
         public void Execute(int index)
@@ -61,9 +61,9 @@ namespace IceEvents.Tests
     }
 
     [BurstCompile]
-    struct QueueParallelBatchedWriteJob : IJobParallelFor
+    struct ParallelBatchedWriteJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemsPerBatch;
 
         public void Execute(int index)
@@ -82,9 +82,9 @@ namespace IceEvents.Tests
     }
 
     [BurstCompile]
-    struct QueueParallelCapacityTestJob : IJobParallelFor
+    struct ParallelCapacityTestJob : IJobParallelFor
     {
-        public QueueParallelEventWriter<ParallelTestEvent> Writer;
+        public ParallelEventWriter<ParallelTestEvent> Writer;
         public int ItemCount;
 
         public void Execute(int index)
@@ -101,39 +101,39 @@ namespace IceEvents.Tests
     #region Test Systems for Queue
 
     [DisableAutoCreation]
-    partial struct QueueParallelSingleJobWriteSystem : ISystem
+    partial struct ParallelSingleJobWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
             var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
-            var job = new QueueParallelWriteJob { Writer = writerHandle.Writer };
+            var job = new ParallelWriteJob { Writer = writerHandle.Writer };
             state.Dependency = job.Schedule(config.ItemCount, 64, state.Dependency);
             writerHandle.ScheduleCommit(ref state);
         }
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelNoOpWriteSystem : ISystem
+    partial struct ParallelNoOpWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
             var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
-            var job = new QueueParallelNoOpJob { Writer = writerHandle.Writer };
+            var job = new ParallelNoOpJob { Writer = writerHandle.Writer };
             state.Dependency = job.Schedule(config.ItemCount, 64, state.Dependency);
             writerHandle.ScheduleCommit(ref state);
         }
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelMultiJobWriteSystem : ISystem
+    partial struct ParallelMultiJobWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
@@ -143,10 +143,10 @@ namespace IceEvents.Tests
             int count1 = config.ItemCount;
             int count2 = config.ItemOffset;
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
-            var job1 = new QueueParallelMultiJobWriteJob { Writer = writerHandle.Writer, ItemOffset = 0 };
-            var job2 = new QueueParallelMultiJobWriteJob { Writer = writerHandle.Writer, ItemOffset = count1 };
+            var job1 = new ParallelMultiJobWriteJob { Writer = writerHandle.Writer, ItemOffset = 0 };
+            var job2 = new ParallelMultiJobWriteJob { Writer = writerHandle.Writer, ItemOffset = count1 };
 
             state.Dependency = job1.Schedule(count1, 64, state.Dependency);
             state.Dependency = job2.Schedule(count2, 64, state.Dependency);
@@ -155,37 +155,37 @@ namespace IceEvents.Tests
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelSystemA : ISystem
+    partial struct ParallelSystemA : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
             var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
-            var job = new QueueParallelWriteJob { Writer = writerHandle.Writer };
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
+            var job = new ParallelWriteJob { Writer = writerHandle.Writer };
             state.Dependency = job.Schedule(config.ItemCount, 64, state.Dependency);
             writerHandle.ScheduleCommit(ref state);
         }
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelSystemB : ISystem
+    partial struct ParallelSystemB : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
             var config = SystemAPI.GetSingleton<ParallelWriteConfig>();
             var buffer = SystemAPI.GetSingletonRW<EventBuffer<ParallelTestEvent>>();
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
-            var job = new QueueParallelWriteJob { Writer = writerHandle.Writer };
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
+            var job = new ParallelWriteJob { Writer = writerHandle.Writer };
             state.Dependency = job.Schedule(config.ItemCount, 64, state.Dependency);
             writerHandle.ScheduleCommit(ref state);
         }
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelBatchedWriteSystem : ISystem
+    partial struct ParallelBatchedWriteSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
@@ -194,9 +194,9 @@ namespace IceEvents.Tests
 
             int streamIndexCount = config.ItemCount;
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
-            var job = new QueueParallelBatchedWriteJob
+            var job = new ParallelBatchedWriteJob
             {
                 Writer = writerHandle.Writer,
                 ItemsPerBatch = config.ItemsPerBatch
@@ -208,7 +208,7 @@ namespace IceEvents.Tests
     }
 
     [DisableAutoCreation]
-    partial struct QueueParallelCapacityTestSystem : ISystem
+    partial struct ParallelCapacityTestSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
         {
@@ -220,9 +220,9 @@ namespace IceEvents.Tests
                 buffer.ValueRW.BufferUpdateCurrent.SetCapacity(config.InitialCapacity);
             }
 
-            var writerHandle = buffer.ValueRW.GetQueueParallelWriter(Allocator.TempJob);
+            var writerHandle = buffer.ValueRW.GetParallelWriter(Allocator.TempJob);
 
-            var job = new QueueParallelCapacityTestJob
+            var job = new ParallelCapacityTestJob
             {
                 Writer = writerHandle.Writer,
                 ItemCount = config.ItemCount
@@ -236,7 +236,7 @@ namespace IceEvents.Tests
     #endregion
 
     [TestFixture]
-    public partial class QueueParallelWriterTests : ECSTestsFixture
+    public partial class ParallelWriterTests : ECSTestsFixture
     {
         [SetUp]
         public override void Setup()
@@ -254,12 +254,12 @@ namespace IceEvents.Tests
         #region Functional Tests
 
         [Test]
-        public void QueueParallelWrite_SingleJob_EventsCommitted()
+        public void ParallelWrite_SingleJob_EventsCommitted()
         {
             var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
             m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 160 });
 
-            var sys = World.CreateSystem<QueueParallelSingleJobWriteSystem>();
+            var sys = World.CreateSystem<ParallelSingleJobWriteSystem>();
             sys.Update(World.Unmanaged);
 
             var buffer = GetBuffer();
@@ -268,12 +268,12 @@ namespace IceEvents.Tests
         }
 
         [Test]
-        public void QueueParallelWrite_NoEvents_NoException()
+        public void ParallelWrite_NoEvents_NoException()
         {
             var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
             m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 10 });
 
-            var sys = World.CreateSystem<QueueParallelNoOpWriteSystem>();
+            var sys = World.CreateSystem<ParallelNoOpWriteSystem>();
             Assert.DoesNotThrow(() => sys.Update(World.Unmanaged));
 
             var buffer = GetBuffer();
@@ -281,7 +281,7 @@ namespace IceEvents.Tests
         }
 
         [Test]
-        public void QueueParallelWrite_MultipleJobsInSameSystem_EventsCommitted()
+        public void ParallelWrite_MultipleJobsInSameSystem_EventsCommitted()
         {
             var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
             m_Manager.SetComponentData(configEntity, new ParallelWriteConfig
@@ -290,7 +290,7 @@ namespace IceEvents.Tests
                 ItemOffset = 50
             });
 
-            var sys = World.CreateSystem<QueueParallelMultiJobWriteSystem>();
+            var sys = World.CreateSystem<ParallelMultiJobWriteSystem>();
             sys.Update(World.Unmanaged);
             m_Manager.CompleteAllTrackedJobs();
 
@@ -299,13 +299,13 @@ namespace IceEvents.Tests
         }
 
         [Test]
-        public void QueueParallelWrite_MultipleSystemsWithAutoDependency_EventsCommitted()
+        public void ParallelWrite_MultipleSystemsWithAutoDependency_EventsCommitted()
         {
             var configEntity = m_Manager.CreateEntity(typeof(ParallelWriteConfig));
             m_Manager.SetComponentData(configEntity, new ParallelWriteConfig { ItemCount = 50 });
 
-            var sys1 = World.CreateSystem<QueueParallelSystemA>();
-            var sys2 = World.CreateSystem<QueueParallelSystemB>();
+            var sys1 = World.CreateSystem<ParallelSystemA>();
+            var sys2 = World.CreateSystem<ParallelSystemB>();
 
             sys1.Update(World.Unmanaged);
             sys2.Update(World.Unmanaged);
@@ -316,7 +316,7 @@ namespace IceEvents.Tests
         }
 
         [Test]
-        public void QueueParallelWrite_LargeEventCount_CapacityExpands()
+        public void ParallelWrite_LargeEventCount_CapacityExpands()
         {
             int streamIndexCount = 64;
             int itemsPerIndex = 300;
@@ -329,7 +329,7 @@ namespace IceEvents.Tests
                 ItemsPerBatch = itemsPerIndex
             });
 
-            var sys = World.CreateSystem<QueueParallelBatchedWriteSystem>();
+            var sys = World.CreateSystem<ParallelBatchedWriteSystem>();
             sys.Update(World.Unmanaged);
             m_Manager.CompleteAllTrackedJobs();
 
@@ -338,7 +338,7 @@ namespace IceEvents.Tests
         }
 
         [Test]
-        public void QueueParallelWrite_CapacitySufficient_NoExpansion()
+        public void ParallelWrite_CapacitySufficient_NoExpansion()
         {
             int initialCapacity = 2048;
             int writeCount = 100;
@@ -350,7 +350,7 @@ namespace IceEvents.Tests
                 InitialCapacity = initialCapacity
             });
 
-            var sys = World.CreateSystem<QueueParallelCapacityTestSystem>();
+            var sys = World.CreateSystem<ParallelCapacityTestSystem>();
             sys.Update(World.Unmanaged);
             m_Manager.CompleteAllTrackedJobs();
 
