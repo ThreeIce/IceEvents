@@ -8,6 +8,7 @@ using Unity.Jobs;
 using IceEvents;
 using System.Collections.Generic;
 using IceEvents.Tests;
+using System.Runtime.InteropServices;
 
 [assembly: RegisterGenericComponentType(typeof(EventBuffer<TestEvent>))]
 
@@ -81,6 +82,7 @@ namespace IceEvents.Tests
     }
 
     [DisableAutoCreation]
+    [StructLayout(LayoutKind.Auto)]
     partial struct TestEventReaderSystem : ISystem
     {
         private EventReader<TestEvent> _reader;
@@ -136,6 +138,7 @@ namespace IceEvents.Tests
     }
 
     [DisableAutoCreation]
+    [StructLayout(LayoutKind.Auto)]
     partial struct TestEventReaderFixedSystem : ISystem
     {
         private EventReader<TestEvent> _reader;
